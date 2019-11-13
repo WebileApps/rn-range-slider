@@ -1,6 +1,6 @@
 {
-  "name": "rn-range-slider",
-  "version": "1.3.0",
+  "name": "@webileapps/rn-range-slider",
+  "version": "0.0.2",
   "author": "Tigran Sahakyan <mail.of.tigran@gmail.com>",
   "description": "React Native Range Slider for Android and iOS",
   "homepage": "https://github.com/githuboftigran/rn-range-slider",
@@ -29,5 +29,12 @@
   },
   "devDependencies": {
   },
+  "files": [
+    "android",
+    "ios",
+    "index.d.ts",
+    "index.js",
+    "RNRangeSlider.podspec"
+  ],
   "license": "MIT"
 }

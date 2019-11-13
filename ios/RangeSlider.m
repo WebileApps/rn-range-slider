@@ -79,7 +79,7 @@ NSDateFormatter *dateTimeFormatter;
 - (instancetype)initWithFrame:(CGRect)frame {
     self = [super initWithFrame:frame];
     if (self) {
-        [self setBackgroundColor:[UIColor blueColor]];
+        [self setBackgroundColor:[UIColor clearColor]];
         dateTimeFormatter = [[NSDateFormatter alloc] init];
         _activeThumb = THUMB_NONE;
         _min = LONG_MIN;
@@ -267,13 +267,17 @@ NSDateFormatter *dateTimeFormatter;
 }
 
 - (void)setLowValue:(long long)lowValue {
+    [self setLowValue:lowValue fromUser:NO];
+}
+
+- (void)setLowValue:(long long)lowValue fromUser:(BOOL)fromUser {
     long long oldLow = _lowValue;
 
     //Make sure low value doesnot overlap on the other thumb.
     long long high = _highValue - [self minimumHandleSpace];
     _lowValue = CLAMP(lowValue, _min, (_rangeEnabled ? high : _max));
     
-    [self checkAndFireValueChangeEvent:oldLow oldHigh:_highValue fromUser:false];
+    [self checkAndFireValueChangeEvent:oldLow oldHigh:_highValue fromUser:fromUser];
     [self setNeedsDisplay];
 }
 
@@ -285,13 +289,17 @@ NSDateFormatter *dateTimeFormatter;
 }
 
 - (void)setHighValue:(long long)highValue {
+    [self setHighValue:highValue fromUser:NO];
+}
+
+- (void)setHighValue:(long long)highValue fromUser:(BOOL)fromUser {
     long long oldHigh = _highValue;
     
     //Make sure hight value doesnot overlap on the other thumb.
     long long low = _lowValue + [self minimumHandleSpace];
     
     _highValue = CLAMP(highValue, low, _max);
-    [self checkAndFireValueChangeEvent:_lowValue oldHigh:oldHigh fromUser:false];
+    [self checkAndFireValueChangeEvent:_lowValue oldHigh:oldHigh fromUser:fromUser];
     [self setNeedsDisplay];
 }
 
@@ -516,9 +524,8 @@ NSDateFormatter *dateTimeFormatter;
 }
 
 - (void)handlePanGesture:(UIPanGestureRecognizer *)recognizer {
-    long long oldLow = _lowValue;
-    long long oldHigh = _highValue;
     if (recognizer.state == UIGestureRecognizerStateBegan) {
+        NSLog(@"locationInView %.2f", [recognizer locationInView:self].x);
         long long pointerValue = [self getValueForPosition:[recognizer locationInView:self].x];
         if (_rangeEnabled &&
                 (_highValue - _lowValue > 3 * [self minimumHandleSpace]) && //is there space for thumb
@@ -529,12 +536,11 @@ NSDateFormatter *dateTimeFormatter;
             (_lowValue == _highValue && pointerValue < _lowValue) ||
             ABS(pointerValue - _lowValue) < ABS(pointerValue - _highValue)) {
             _activeThumb = THUMB_LOW;
-            [self setLowValue:pointerValue];
+            [self setLowValue:pointerValue fromUser:YES];
         } else {
             _activeThumb = THUMB_HIGH;
-            [self setHighValue:pointerValue];
+            [self setHighValue:pointerValue fromUser:YES];
         }
-        [self checkAndFireValueChangeEvent:oldLow oldHigh:oldHigh fromUser:true];
         [_delegate rangeSliderTouchStarted:self];
         
     } else if (recognizer.state == UIGestureRecognizerStateChanged) {
@@ -546,12 +552,12 @@ NSDateFormatter *dateTimeFormatter;
                 
                 if (translation < 0) {
                     long long l = MAX(_min, _lowValue + deltaValue);
-                    [self setHighValue:l + _highValue - _lowValue];
-                    [self setLowValue:l];
+                    [self setHighValue:l + _highValue - _lowValue fromUser:YES];
+                    [self setLowValue:l fromUser:YES];
                 } else {
                     long long h = MIN(_max, _highValue + deltaValue);
-                    [self setLowValue:h - _highValue + _lowValue];
-                    [self setHighValue:h];
+                    [self setLowValue:h - _highValue + _lowValue fromUser:YES];
+                    [self setHighValue:h fromUser:YES];
                 }
                 [recognizer setTranslation:CGPointZero inView:self];
             }
@@ -561,9 +567,9 @@ NSDateFormatter *dateTimeFormatter;
             if (!_rangeEnabled) {
                 _lowValue = pointerValue;
             } else if (_activeThumb == THUMB_LOW) {
-                [self setLowValue:pointerValue];
+                [self setLowValue:pointerValue fromUser:YES];
             } else if (_activeThumb == THUMB_HIGH) {
-                [self setHighValue:pointerValue];
+                [self setHighValue:pointerValue fromUser:YES];
             }
         }
     } else if (recognizer.state == UIGestureRecognizerStateEnded || recognizer.state == UIGestureRecognizerStateCancelled || recognizer.state == UIGestureRecognizerStateFailed) {
@@ -571,15 +577,6 @@ NSDateFormatter *dateTimeFormatter;
         [_delegate rangeSliderTouchEnded:self];
     }
     [self setNeedsDisplay];
-}
-
-- (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)gestureRecognizer {
-    if (gestureRecognizer == self.pangestureRecognizer) {
-        UIPanGestureRecognizer *panGestureRecognizer = (UIPanGestureRecognizer *)gestureRecognizer;
-        CGFloat xTranslation = [panGestureRecognizer translationInView:self].x;
-        return (xTranslation >= 1 || xTranslation <= -1);
-    }
-    return true;
 }
 
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer shouldReceiveTouch:(UITouch *)touch {
