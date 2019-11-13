@@ -21,6 +21,12 @@ const int THUMB_LOW = 0;
 const int THUMB_HIGH = 1;
 const int THUMB_NONE = -1;
 
+@interface RangeSlider () <UIGestureRecognizerDelegate>
+
+@property (nonatomic, strong) UIPanGestureRecognizer *pangestureRecognizer;
+
+@end
+
 @implementation RangeSlider
 
 + (UIColor *)colorWithHexString:(const NSString *)hexString {
@@ -66,7 +72,6 @@ const int THUMB_NONE = -1;
     return hexComponent / 255.0;
 }
 
-UITouch *activeTouch;
 UIFont *labelFont;
 NSDateFormatter *dateTimeFormatter;
 
@@ -84,6 +89,7 @@ NSDateFormatter *dateTimeFormatter;
         _initialHighValueSet = false;
         labelFont = [UIFont systemFontOfSize:14];
         _step = 1;
+        [self _initiazeGestureRecognizer];
     }
     return self;
 }
@@ -280,71 +286,7 @@ NSDateFormatter *dateTimeFormatter;
     [self setNeedsDisplay];
 }
 
-- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(nullable UIEvent *)event {
-    if (_disabled || activeTouch != nil || _min == LONG_MIN || _max == LONG_MAX) { // Min or max values have not been set yet
-        return;
-    }
-
-    activeTouch = touches.anyObject;
-
-    long long oldLow = _lowValue;
-    long long oldHigh = _highValue;
-
-    long long pointerValue = [self getValueForPosition];
-    if (!_rangeEnabled ||
-        (_lowValue == _highValue && pointerValue < _lowValue) ||
-        ABS(pointerValue - _lowValue) < ABS(pointerValue - _highValue)) {
-        _activeThumb = THUMB_LOW;
-        _lowValue = pointerValue;
-    } else {
-        _activeThumb = THUMB_HIGH;
-        _highValue = pointerValue;
-    }
-    [self checkAndFireValueChangeEvent:oldLow oldHigh:oldHigh fromUser:true];
-    [_delegate rangeSliderTouchStarted:self];
-    [self setNeedsDisplay];
-}
-
-- (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(nullable UIEvent *)event {
-    if (_disabled || _min == LONG_MIN || _max == LONG_MAX) { // Min or max values have not been set yet
-        return;
-    }
-    long long oldLow = _lowValue;
-    long long oldHigh = _highValue;
-    long long pointerValue = [self getValueForPosition];
-    if (!_rangeEnabled) {
-        _lowValue = pointerValue;
-    } else if (_activeThumb == THUMB_LOW) {
-        _lowValue = CLAMP(pointerValue, _min, _highValue);
-    } else if (_activeThumb == THUMB_HIGH) {
-        _highValue = CLAMP(pointerValue, _lowValue, _max);
-    }
-    [self checkAndFireValueChangeEvent:oldLow oldHigh:oldHigh fromUser:true];
-    [self setNeedsDisplay];
-}
-
-- (void)touchesEnded:(NSSet<UITouch *> *)touches withEvent:(nullable UIEvent *)event {
-    if(_disabled) {
-        return;
-    }
-    activeTouch = nil;
-    _activeThumb = THUMB_NONE;
-    [_delegate rangeSliderTouchEnded:self];
-    [self setNeedsDisplay];
-}
-
-- (void)touchesCancelled:(NSSet<UITouch *> *)touches withEvent:(nullable UIEvent *)event {
-    if(_disabled) {
-        return;
-    }
-    activeTouch = nil;
-    _activeThumb = THUMB_NONE;
-    [_delegate rangeSliderTouchEnded:self];
-    [self setNeedsDisplay];
-}
-
-- (long long)getValueForPosition {
-    CGFloat position = [activeTouch locationInView:self].x;
+- (long long)getValueForPosition:(CGFloat)position {
     if (position <= _thumbRadius) {
         return _min;
     } else if (position >= [self bounds].size.width - _thumbRadius) {
@@ -407,7 +349,8 @@ NSDateFormatter *dateTimeFormatter;
     // Draw the blank line
     CGContextSetLineWidth(context, _lineWidth);
     CGContextMoveToPoint(context, _thumbRadius, cy);
-    CGContextAddLineToPoint(context, width - _thumbRadius, cy);
+    CGContextAddLineToPoint(context, width - _thumbRadius, cy)
+
     [blankColor setStroke];
     CGContextStrokePath(context);
 
@@ -523,6 +466,63 @@ NSDateFormatter *dateTimeFormatter;
     } else { // For other formatting methods, add cases here
         return @"";
     }
+}
+
+# pragma mark -
+# pragma mark PanGestureHandling
+- (void)_initiazeGestureRecognizer {
+    self.pangestureRecognizer = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handlePanGesture:)];
+    self.pangestureRecognizer.delegate = self;
+    [self addGestureRecognizer:self.pangestureRecognizer];
+}
+
+- (void)handlePanGesture:(UIPanGestureRecognizer *)recognizer {
+    long long oldLow = _lowValue;
+    long long oldHigh = _highValue;
+    if (recognizer.state == UIGestureRecognizerStateBegan) {
+        long long pointerValue = [self getValueForPosition:[recognizer locationInView:self].x];
+        if (!_rangeEnabled ||
+            (_lowValue == _highValue && pointerValue < _lowValue) ||
+            ABS(pointerValue - _lowValue) < ABS(pointerValue - _highValue)) {
+            _activeThumb = THUMB_LOW;
+            _lowValue = pointerValue;
+        } else {
+            _activeThumb = THUMB_HIGH;
+            _highValue = pointerValue;
+        }
+        [self checkAndFireValueChangeEvent:oldLow oldHigh:oldHigh fromUser:true];
+        [_delegate rangeSliderTouchStarted:self];
+        
+    } else if (recognizer.state == UIGestureRecognizerStateChanged) {
+        long long pointerValue = [self getValueForPosition:[recognizer locationInView:self].x];
+        if (!_rangeEnabled) {
+            _lowValue = pointerValue;
+        } else if (_activeThumb == THUMB_LOW) {
+            _lowValue = CLAMP(pointerValue, _min, _highValue);
+        } else if (_activeThumb == THUMB_HIGH) {
+            _highValue = CLAMP(pointerValue, _lowValue, _max);
+        }
+        [self checkAndFireValueChangeEvent:oldLow oldHigh:oldHigh fromUser:true];
+        [self setNeedsDisplay];
+    } else if (recognizer.state == UIGestureRecognizerStateEnded || recognizer.state == UIGestureRecognizerStateCancelled || recognizer.state == UIGestureRecognizerStateFailed) {
+        _activeThumb = THUMB_NONE;
+        [_delegate rangeSliderTouchEnded:self];
+    }
+    [self setNeedsDisplay];
+}
+
+- (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)gestureRecognizer {
+    if (gestureRecognizer == self.pangestureRecognizer) {
+        UIPanGestureRecognizer *panGestureRecognizer = (UIPanGestureRecognizer *)gestureRecognizer;
+        CGFloat xTranslation = [panGestureRecognizer translationInView:self].x;
+        NSLog(@"xTranslation %.2f", xTranslation);
+        return (xTranslation >= 1 || xTranslation <= -1);
+    }
+    return true;
+}
+
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer shouldReceiveTouch:(UITouch *)touch {
+    return !(_disabled || _min == LONG_MIN || _max == LONG_MAX);
 }
 
 @end
