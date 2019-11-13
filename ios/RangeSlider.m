@@ -19,6 +19,7 @@
 
 const int THUMB_LOW = 0;
 const int THUMB_HIGH = 1;
+const int THUMB_MIDDLE = 2;
 const int THUMB_NONE = -1;
 
 @interface RangeSlider () <UIGestureRecognizerDelegate>
@@ -78,7 +79,7 @@ NSDateFormatter *dateTimeFormatter;
 - (instancetype)initWithFrame:(CGRect)frame {
     self = [super initWithFrame:frame];
     if (self) {
-        [self setBackgroundColor:[UIColor clearColor]];
+        [self setBackgroundColor:[UIColor blueColor]];
         dateTimeFormatter = [[NSDateFormatter alloc] init];
         _activeThumb = THUMB_NONE;
         _min = LONG_MIN;
@@ -253,30 +254,43 @@ NSDateFormatter *dateTimeFormatter;
     [self checkAndFireValueChangeEvent:oldLow oldHigh:oldHigh fromUser:false];
 }
 
-- (void)setInitialLowValue:(double)lowValue {
+- (void)setInitialLowValue:(long long)lowValue {
     if (!_initialLowValueSet) {
         _initialLowValueSet = true;
         [self setLowValue:lowValue];
     }
 }
 
-- (void)setLowValue:(double)lowValue {
+- (long long)minimumHandleSpace {
+    CGFloat availableWidth = [self bounds].size.width - 2 * _thumbRadius;
+    return (1 * _thumbRadius) * (_max - _min) / availableWidth;
+}
+
+- (void)setLowValue:(long long)lowValue {
     long long oldLow = _lowValue;
-    _lowValue = CLAMP(lowValue, _min, (_rangeEnabled ? _highValue : _max));
+
+    //Make sure low value doesnot overlap on the other thumb.
+    long long high = _highValue - [self minimumHandleSpace];
+    _lowValue = CLAMP(lowValue, _min, (_rangeEnabled ? high : _max));
+    
     [self checkAndFireValueChangeEvent:oldLow oldHigh:_highValue fromUser:false];
     [self setNeedsDisplay];
 }
 
-- (void)setInitialHighValue:(double)highValue {
+- (void)setInitialHighValue:(long long)highValue {
     if (!_initialHighValueSet) {
         _initialHighValueSet = true;
         [self setHighValue:highValue];
     }
 }
 
-- (void)setHighValue:(double)highValue {
+- (void)setHighValue:(long long)highValue {
     long long oldHigh = _highValue;
-    _highValue = CLAMP(highValue, _lowValue, _max);
+    
+    //Make sure hight value doesnot overlap on the other thumb.
+    long long low = _lowValue + [self minimumHandleSpace];
+    
+    _highValue = CLAMP(highValue, low, _max);
     [self checkAndFireValueChangeEvent:_lowValue oldHigh:oldHigh fromUser:false];
     [self setNeedsDisplay];
 }
@@ -313,8 +327,6 @@ NSDateFormatter *dateTimeFormatter;
     }
     UIColor *blankColor = [RangeSlider colorWithHexString:_blankColor];
     UIColor *selectionColor = [RangeSlider colorWithHexString:_selectionColor];
-    UIColor *thumbColor = [RangeSlider colorWithHexString:_thumbColor];
-    UIColor *thumbBorderColor = [RangeSlider colorWithHexString:_thumbBorderColor];
     UIColor *labelBackgroundColor = [RangeSlider colorWithHexString:_labelBackgroundColor];
     UIColor *labelTextColor = [RangeSlider colorWithHexString:_labelTextColor];
     UIColor *labelBorderColor = [RangeSlider colorWithHexString:_labelBorderColor];
@@ -333,24 +345,24 @@ NSDateFormatter *dateTimeFormatter;
 
     CGFloat drawingHeight = labelAndGapHeight + 2 * _thumbRadius;
 
-    if (rect.size.height > drawingHeight) {
+    if (self.bounds.size.height > drawingHeight) {
         if ([_gravity isEqualToString: BOTTOM]) {
-            CGContextTranslateCTM(context, 0, rect.size.height - drawingHeight);
+            CGContextTranslateCTM(context, 0, self.bounds.size.height - drawingHeight);
         } else if([_gravity isEqualToString: CENTER]) {
-            CGContextTranslateCTM(context, 0, (rect.size.height - drawingHeight) / 2);
+            CGContextTranslateCTM(context, 0, (self.bounds.size.height - drawingHeight) / 2);
         }
     }
 
-    CGFloat cy = labelAndGapHeight + _thumbRadius;
+    CGFloat cy = labelAndGapHeight + _thumbRadius + _thumbRadius/2;
 
-    CGFloat width = rect.size.width;
+    CGFloat width = self.bounds.size.width;
     CGFloat availableWidth = width - 2 * _thumbRadius;
 
     // Draw the blank line
     CGContextSetLineWidth(context, _lineWidth);
-    CGContextMoveToPoint(context, _thumbRadius, cy);
-    CGContextAddLineToPoint(context, width - _thumbRadius, cy)
-
+    CGContextSetLineCap(context, kCGLineCapRound);
+    CGContextMoveToPoint(context, _thumbRadius/2, cy);
+    CGContextAddLineToPoint(context, width - _thumbRadius / 2, cy);
     [blankColor setStroke];
     CGContextStrokePath(context);
 
@@ -368,20 +380,22 @@ NSDateFormatter *dateTimeFormatter;
     }
     CGContextStrokePath(context);
 
+    if (_rangeEnabled && _highValue - _lowValue > 4 * [self minimumHandleSpace]) {
+        UIGraphicsPushContext(context);
+        CGFloat lowX = 3 * _thumbRadius + availableWidth * (_lowValue - _min) / (_max - _min);
+        CGFloat highX = - _thumbRadius + availableWidth * (_highValue - _min) / (_max - _min);
+        CGContextSetLineWidth(context, 5);
+        CGContextSetLineCap(context, kCGLineCapSquare);
+        CGContextMoveToPoint(context, lowX, cy);
+        CGContextAddLineToPoint(context, highX, cy);
+        CGContextStrokePath(context);
+        UIGraphicsPopContext();
+    }
+    
     if (_thumbRadius > 0) {
-        [thumbBorderColor setFill];
-        CGContextAddArc(context, lowX, cy, _thumbRadius, 0, M_PI * 2, true);
-        CGContextFillPath(context);
-        [thumbColor setFill];
-        CGContextAddArc(context, lowX, cy, _thumbRadius - _thumbBorderWidth, 0, M_PI * 2, true);
-        CGContextFillPath(context);
+        [self drawThumbAtX:lowX centerY:cy context:context];
         if (_rangeEnabled) {
-            [thumbBorderColor setFill];
-            CGContextAddArc(context, highX, cy, _thumbRadius, 0, M_PI * 2, true);
-            CGContextFillPath(context);
-            [thumbColor setFill];
-            CGContextAddArc(context, highX, cy, _thumbRadius - _thumbBorderWidth, 0, M_PI * 2, true);
-            CGContextFillPath(context);
+            [self drawThumbAtX:highX centerY:cy context:context];
         }
     }
 
@@ -438,6 +452,30 @@ NSDateFormatter *dateTimeFormatter;
     //CGContextShowTextAtPoint(context, cx - labelTextWidth / 2 + overflowOffset, _labelBorderWidth + _labelPadding, [text UTF8String], text.length);
 }
 
+- (void)drawThumbAtX:(CGFloat )x centerY:(CGFloat)cy context:(CGContextRef)context {
+    UIGraphicsPushContext(context);
+    UIColor *thumbColor = [RangeSlider colorWithHexString:_thumbColor];
+    UIColor *thumbBorderColor = [RangeSlider colorWithHexString:_thumbBorderColor];
+    [thumbColor setFill];
+    CGMutablePathRef pathRef = CGPathCreateMutable();
+//    CGPathAddRect(pathRef, nil, CGRectMake(, cy - _thumbRadius * 3/4, _thumbRadius, _thumbRadius * 3 / 2));
+    CGContextSetLineWidth(context, 2);
+    CGContextSetStrokeColorWithColor(context, thumbBorderColor.CGColor);
+    CGPathMoveToPoint(pathRef, nil, x - _thumbRadius/2, cy - _thumbRadius * 3/4);
+    CGPathAddLineToPoint(pathRef, nil, x - _thumbRadius/2, cy + _thumbRadius * 3 / 4);
+    CGPathAddLineToPoint(pathRef, nil, x + _thumbRadius/2, cy + _thumbRadius * 3 / 4);
+    CGPathAddLineToPoint(pathRef, nil, x + _thumbRadius/2, cy - _thumbRadius * 3 / 4);
+    CGPathAddLineToPoint(pathRef, nil, x , cy - _thumbRadius * 3 / 4 - _thumbRadius * 3 / 4);
+    CGPathAddLineToPoint(pathRef, nil, x - _thumbRadius/2, cy - _thumbRadius * 3/4);
+    CGContextAddPath(context, pathRef);
+//    CGContextFillPath(context);
+    CGContextDrawPath(context, kCGPathFillStroke);
+//    [thumbColor setFill];
+//    CGContextAddArc(context, x, cy, _thumbRadius - _thumbBorderWidth, 0, M_PI * 2, true);
+//    CGContextFillPath(context);
+    UIGraphicsPopContext();
+}
+
 - (void)preparePath:(CGContextRef)context x:(CGFloat)x y:(CGFloat)y left:(CGFloat)left top:(CGFloat)top right:(CGFloat)right bottom:(CGFloat)bottom tailHeight:(CGFloat)tailHeight {
     CGFloat cx = x;
     CGContextMoveToPoint(context, x, y);
@@ -473,6 +511,7 @@ NSDateFormatter *dateTimeFormatter;
 - (void)_initiazeGestureRecognizer {
     self.pangestureRecognizer = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handlePanGesture:)];
     self.pangestureRecognizer.delegate = self;
+    self.pangestureRecognizer.maximumNumberOfTouches = 1;
     [self addGestureRecognizer:self.pangestureRecognizer];
 }
 
@@ -481,29 +520,52 @@ NSDateFormatter *dateTimeFormatter;
     long long oldHigh = _highValue;
     if (recognizer.state == UIGestureRecognizerStateBegan) {
         long long pointerValue = [self getValueForPosition:[recognizer locationInView:self].x];
-        if (!_rangeEnabled ||
+        if (_rangeEnabled &&
+                (_highValue - _lowValue > 3 * [self minimumHandleSpace]) && //is there space for thumb
+                (_highValue - 2 * [self minimumHandleSpace] >= pointerValue) && // is pointer less than high value
+                (_lowValue + 2 * [self minimumHandleSpace] <= pointerValue)) { // is pointer more than low value
+                _activeThumb = THUMB_MIDDLE;
+        } else if (!_rangeEnabled ||
             (_lowValue == _highValue && pointerValue < _lowValue) ||
             ABS(pointerValue - _lowValue) < ABS(pointerValue - _highValue)) {
             _activeThumb = THUMB_LOW;
-            _lowValue = pointerValue;
+            [self setLowValue:pointerValue];
         } else {
             _activeThumb = THUMB_HIGH;
-            _highValue = pointerValue;
+            [self setHighValue:pointerValue];
         }
         [self checkAndFireValueChangeEvent:oldLow oldHigh:oldHigh fromUser:true];
         [_delegate rangeSliderTouchStarted:self];
         
     } else if (recognizer.state == UIGestureRecognizerStateChanged) {
-        long long pointerValue = [self getValueForPosition:[recognizer locationInView:self].x];
-        if (!_rangeEnabled) {
-            _lowValue = pointerValue;
-        } else if (_activeThumb == THUMB_LOW) {
-            _lowValue = CLAMP(pointerValue, _min, _highValue);
-        } else if (_activeThumb == THUMB_HIGH) {
-            _highValue = CLAMP(pointerValue, _lowValue, _max);
+        if (_activeThumb == THUMB_MIDDLE) {
+            CGFloat translation = [recognizer translationInView:self].x;
+            CGFloat availableWidth = [self bounds].size.width - 2 * _thumbRadius;
+            long long deltaValue = translation / availableWidth * (_max - _min);
+            if (ABS(deltaValue) > 0) {
+                
+                if (translation < 0) {
+                    long long l = MAX(_min, _lowValue + deltaValue);
+                    [self setHighValue:l + _highValue - _lowValue];
+                    [self setLowValue:l];
+                } else {
+                    long long h = MIN(_max, _highValue + deltaValue);
+                    [self setLowValue:h - _highValue + _lowValue];
+                    [self setHighValue:h];
+                }
+                [recognizer setTranslation:CGPointZero inView:self];
+            }
+            
+        } else {
+            long long pointerValue = [self getValueForPosition:[recognizer locationInView:self].x];
+            if (!_rangeEnabled) {
+                _lowValue = pointerValue;
+            } else if (_activeThumb == THUMB_LOW) {
+                [self setLowValue:pointerValue];
+            } else if (_activeThumb == THUMB_HIGH) {
+                [self setHighValue:pointerValue];
+            }
         }
-        [self checkAndFireValueChangeEvent:oldLow oldHigh:oldHigh fromUser:true];
-        [self setNeedsDisplay];
     } else if (recognizer.state == UIGestureRecognizerStateEnded || recognizer.state == UIGestureRecognizerStateCancelled || recognizer.state == UIGestureRecognizerStateFailed) {
         _activeThumb = THUMB_NONE;
         [_delegate rangeSliderTouchEnded:self];
@@ -515,7 +577,6 @@ NSDateFormatter *dateTimeFormatter;
     if (gestureRecognizer == self.pangestureRecognizer) {
         UIPanGestureRecognizer *panGestureRecognizer = (UIPanGestureRecognizer *)gestureRecognizer;
         CGFloat xTranslation = [panGestureRecognizer translationInView:self].x;
-        NSLog(@"xTranslation %.2f", xTranslation);
         return (xTranslation >= 1 || xTranslation <= -1);
     }
     return true;
