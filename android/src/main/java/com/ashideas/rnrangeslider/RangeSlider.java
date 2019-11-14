@@ -10,8 +10,8 @@ import android.util.TypedValue;
 import android.view.MotionEvent;
 import android.view.View;
 
-import androidx.annotation.Nullable;
-import androidx.core.view.ViewCompat;
+import android.support.annotation.Nullable;
+import android.support.v4.view.ViewCompat;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -124,6 +124,18 @@ public class RangeSlider extends View {
 
         thumbPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         thumbBorderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        thumbBorderPaint.setStyle(Paint.Style.STROKE);
+        thumbBorderPaint.setStrokeWidth(dpToPx(2));
+    }
+
+    /**
+     * Tries to claim the user's drag motion, and requests disallowing any
+     * ancestors from stealing events in the drag.
+     */
+    private void attemptClaimDrag() {
+        if (getParent() != null) {
+            getParent().requestDisallowInterceptTouchEvent(true);
+        }
     }
 
     public void setOnValueChangeListener(OnValueChangeListener onValueChangeListener) {
@@ -307,7 +319,7 @@ public class RangeSlider extends View {
      */
     public void setLowValue(long lowValue) {
         long oldLow = this.lowValue;
-        this.lowValue = Utils.clamp(lowValue, minValue, rangeEnabled ? highValue : maxValue);
+        this.lowValue = Utils.clamp(lowValue, minValue, rangeEnabled ? highValue - 1 : maxValue);
         checkAndFireValueChangeEvent(oldLow, highValue, false);
         ViewCompat.postInvalidateOnAnimation(this);
     }
@@ -326,7 +338,7 @@ public class RangeSlider extends View {
      */
     public void setHighValue(long highValue) {
         long oldHigh = this.highValue;
-        this.highValue = Utils.clamp(highValue, lowValue, maxValue);
+        this.highValue = Utils.clamp(highValue, lowValue + 1, maxValue);
         checkAndFireValueChangeEvent(lowValue, oldHigh, false);
         ViewCompat.postInvalidateOnAnimation(this);
     }
@@ -379,6 +391,7 @@ public class RangeSlider extends View {
     }
 
     private void handleTouchDown(long pointerValue) {
+        this.attemptClaimDrag();
         if (
             !rangeEnabled ||
             (lowValue == highValue && pointerValue < lowValue) ||
@@ -393,12 +406,13 @@ public class RangeSlider extends View {
     }
 
     private void handleTouchMove(long pointerValue) {
+        this.attemptClaimDrag();
         if (!rangeEnabled) {
             lowValue = pointerValue;
         } else if (activeThumb == THUMB_LOW) {
-            lowValue = Utils.clamp(pointerValue, minValue, highValue);
+            lowValue = Utils.clamp(pointerValue, minValue, highValue - 1);
         } else if (activeThumb == THUMB_HIGH) {
-            highValue = Utils.clamp(pointerValue, lowValue, maxValue);
+            highValue = Utils.clamp(pointerValue, lowValue + 1, maxValue);
         }
     }
 
@@ -454,7 +468,7 @@ public class RangeSlider extends View {
         if (thumbRadius > 0) {
             drawThumb(canvas, lowX, cy);
             if (rangeEnabled) {
-                drawThumb(canvas, highX, cy);
+                drawThumb(canvas, Math.max(lowX + thumbRadius, highX), cy);
             }
         }
 
@@ -508,8 +522,15 @@ public class RangeSlider extends View {
     }
 
     private void drawThumb(Canvas canvas, float x, float y) {
-        canvas.drawCircle(x, y, thumbRadius, thumbBorderPaint);
-        canvas.drawCircle(x, y, thumbRadius - thumbBorderWidth, thumbPaint);
+        Path path = new Path();
+        path.moveTo(x - thumbRadius / 2, y - thumbRadius * 3 / 4);
+        path.rLineTo(0, thumbRadius * 3 / 2);
+        path.rLineTo(thumbRadius, 0);
+        path.rLineTo(0, - thumbRadius * 3 / 2);
+        path.rLineTo(-thumbRadius/2, -thumbRadius * 3 / 4);
+        path.close();
+        canvas.drawPath(path, thumbPaint);
+        canvas.drawPath(path, thumbBorderPaint);
     }
 
     private void preparePath(float x, float y, float left, float top, float right, float bottom, float tailHeight) {
