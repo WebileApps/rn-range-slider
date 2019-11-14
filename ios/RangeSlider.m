@@ -368,9 +368,8 @@ NSDateFormatter *dateTimeFormatter;
 
     // Draw the blank line
     CGContextSetLineWidth(context, _lineWidth);
-    CGContextSetLineCap(context, kCGLineCapRound);
-    CGContextMoveToPoint(context, _thumbRadius/2, cy);
-    CGContextAddLineToPoint(context, width - _thumbRadius / 2, cy);
+    CGContextMoveToPoint(context, _thumbRadius, cy);
+    CGContextAddLineToPoint(context, width - _thumbRadius, cy);
     [blankColor setStroke];
     CGContextStrokePath(context);
 
@@ -388,22 +387,22 @@ NSDateFormatter *dateTimeFormatter;
     }
     CGContextStrokePath(context);
 
-    if (_rangeEnabled && _highValue - _lowValue > 4 * [self minimumHandleSpace]) {
-        UIGraphicsPushContext(context);
-        CGFloat lowX = 3 * _thumbRadius + availableWidth * (_lowValue - _min) / (_max - _min);
-        CGFloat highX = - _thumbRadius + availableWidth * (_highValue - _min) / (_max - _min);
-        CGContextSetLineWidth(context, 5);
-        CGContextSetLineCap(context, kCGLineCapSquare);
-        CGContextMoveToPoint(context, lowX, cy);
-        CGContextAddLineToPoint(context, highX, cy);
-        CGContextStrokePath(context);
-        UIGraphicsPopContext();
-    }
+//    if (_rangeEnabled && _highValue - _lowValue > 4 * [self minimumHandleSpace]) {
+//        UIGraphicsPushContext(context);
+//        CGFloat lowX = 3 * _thumbRadius + availableWidth * (_lowValue - _min) / (_max - _min);
+//        CGFloat highX = - _thumbRadius + availableWidth * (_highValue - _min) / (_max - _min);
+//        CGContextSetLineWidth(context, 5);
+//        CGContextSetLineCap(context, kCGLineCapSquare);
+//        CGContextMoveToPoint(context, lowX, cy);
+//        CGContextAddLineToPoint(context, highX, cy);
+//        CGContextStrokePath(context);
+//        UIGraphicsPopContext();
+//    }
     
     if (_thumbRadius > 0) {
         [self drawThumbAtX:lowX centerY:cy context:context];
         if (_rangeEnabled) {
-            [self drawThumbAtX:highX centerY:cy context:context];
+            [self drawThumbAtX:MAX(lowX + _thumbRadius, highX) centerY:cy context:context];
         }
     }
 
@@ -527,12 +526,7 @@ NSDateFormatter *dateTimeFormatter;
     if (recognizer.state == UIGestureRecognizerStateBegan) {
         NSLog(@"locationInView %.2f", [recognizer locationInView:self].x);
         long long pointerValue = [self getValueForPosition:[recognizer locationInView:self].x];
-        if (_rangeEnabled &&
-                (_highValue - _lowValue > 3 * [self minimumHandleSpace]) && //is there space for thumb
-                (_highValue - 2 * [self minimumHandleSpace] >= pointerValue) && // is pointer less than high value
-                (_lowValue + 2 * [self minimumHandleSpace] <= pointerValue)) { // is pointer more than low value
-                _activeThumb = THUMB_MIDDLE;
-        } else if (!_rangeEnabled ||
+        if (!_rangeEnabled ||
             (_lowValue == _highValue && pointerValue < _lowValue) ||
             ABS(pointerValue - _lowValue) < ABS(pointerValue - _highValue)) {
             _activeThumb = THUMB_LOW;
@@ -577,6 +571,15 @@ NSDateFormatter *dateTimeFormatter;
         [_delegate rangeSliderTouchEnded:self];
     }
     [self setNeedsDisplay];
+}
+
+- (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)gestureRecognizer {
+    if (gestureRecognizer == self.pangestureRecognizer) {
+        UIPanGestureRecognizer *panGestureRecognizer = (UIPanGestureRecognizer *)gestureRecognizer;
+        CGFloat xTranslation = [panGestureRecognizer translationInView:self].x;
+        return (xTranslation >= 1 || xTranslation <= -1);
+    }
+    return true;
 }
 
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer shouldReceiveTouch:(UITouch *)touch {
