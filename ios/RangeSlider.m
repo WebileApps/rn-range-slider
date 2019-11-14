@@ -158,7 +158,7 @@ NSDateFormatter *dateTimeFormatter;
 }
 
 - (void)setGravity:(NSString *)gravity {
-    _gravity = gravity;
+    _gravity = @"TOP";
     [self setNeedsDisplay];
 }
 
@@ -303,6 +303,30 @@ NSDateFormatter *dateTimeFormatter;
     [self setNeedsDisplay];
 }
 
+- (void)setMidValue:(double)midValue fromUser:(BOOL)fromUser {
+    long long oldHigh = _highValue;
+    long long oldLow = _lowValue;
+    long long oldMid = (_highValue + _lowValue) / 2;
+    long long dx = midValue - oldMid;
+    CGFloat newHigh, newLow;
+    if (dx > 0) { //moving right.
+        newHigh = MIN(_max, oldHigh + dx);
+        dx = newHigh - _highValue;
+        newLow = _lowValue + dx;
+    } else {
+        newLow = MAX(_min, oldLow + dx);
+        dx = newLow - _lowValue;
+        newHigh = _highValue + dx;
+    }
+    if (dx == 0) {
+        return;
+    }
+    _highValue = newHigh;
+    _lowValue = newLow;
+    [self checkAndFireValueChangeEvent:oldLow oldHigh:oldHigh fromUser:fromUser];
+    [self setNeedsDisplay];
+}
+
 - (void)layoutSubviews {
     [super layoutSubviews];
     [self setNeedsDisplay];
@@ -358,6 +382,8 @@ NSDateFormatter *dateTimeFormatter;
             CGContextTranslateCTM(context, 0, self.bounds.size.height - drawingHeight);
         } else if([_gravity isEqualToString: CENTER]) {
             CGContextTranslateCTM(context, 0, (self.bounds.size.height - drawingHeight) / 2);
+        } else {
+            CGContextTranslateCTM(context, 0, 5);
         }
     }
 
@@ -369,6 +395,7 @@ NSDateFormatter *dateTimeFormatter;
     // Draw the blank line
     CGContextSetLineWidth(context, _lineWidth);
     CGContextMoveToPoint(context, _thumbRadius, cy);
+    CGContextSetLineCap(context, kCGLineCapSquare);
     CGContextAddLineToPoint(context, width - _thumbRadius, cy);
     [blankColor setStroke];
     CGContextStrokePath(context);
@@ -400,9 +427,10 @@ NSDateFormatter *dateTimeFormatter;
 //    }
     
     if (_thumbRadius > 0) {
-        [self drawThumbAtX:lowX centerY:cy context:context];
+        [self drawThumbAtX:lowX centerY:cy lineAtLeftEdge:YES context:context];
         if (_rangeEnabled) {
-            [self drawThumbAtX:MAX(lowX + _thumbRadius, highX) centerY:cy context:context];
+            [self drawThumbAtX:MAX(lowX + _thumbRadius, highX) centerY:cy lineAtLeftEdge:NO context:context];
+            [self drawScrollerAtY:3 * _thumbRadius  startX:lowX endX:MAX(lowX + _thumbRadius, highX) context:context];
         }
     }
 
@@ -459,14 +487,14 @@ NSDateFormatter *dateTimeFormatter;
     //CGContextShowTextAtPoint(context, cx - labelTextWidth / 2 + overflowOffset, _labelBorderWidth + _labelPadding, [text UTF8String], text.length);
 }
 
-- (void)drawThumbAtX:(CGFloat )x centerY:(CGFloat)cy context:(CGContextRef)context {
+- (void)drawThumbAtX:(CGFloat )x centerY:(CGFloat)cy lineAtLeftEdge:(BOOL)lineAtLeftEdge context:(CGContextRef)context {
     UIGraphicsPushContext(context);
     UIColor *thumbColor = [RangeSlider colorWithHexString:_thumbColor];
     UIColor *thumbBorderColor = [RangeSlider colorWithHexString:_thumbBorderColor];
     [thumbColor setFill];
     CGMutablePathRef pathRef = CGPathCreateMutable();
 //    CGPathAddRect(pathRef, nil, CGRectMake(, cy - _thumbRadius * 3/4, _thumbRadius, _thumbRadius * 3 / 2));
-    CGContextSetLineWidth(context, 2);
+    CGContextSetLineWidth(context, 1);
     CGContextSetStrokeColorWithColor(context, thumbBorderColor.CGColor);
     CGPathMoveToPoint(pathRef, nil, x - _thumbRadius/2, cy - _thumbRadius * 3/4);
     CGPathAddLineToPoint(pathRef, nil, x - _thumbRadius/2, cy + _thumbRadius * 3 / 4);
@@ -477,9 +505,35 @@ NSDateFormatter *dateTimeFormatter;
     CGContextAddPath(context, pathRef);
 //    CGContextFillPath(context);
     CGContextDrawPath(context, kCGPathFillStroke);
+    
+    CGFloat lineX = lineAtLeftEdge ? x - _thumbRadius/2 : x + _thumbRadius/2;
+    CGContextMoveToPoint(context, lineX, cy);
+    CGContextAddLineToPoint(context, lineX, cy + 3 * _thumbRadius);
+    CGContextStrokePath(context);
 //    [thumbColor setFill];
 //    CGContextAddArc(context, x, cy, _thumbRadius - _thumbBorderWidth, 0, M_PI * 2, true);
 //    CGContextFillPath(context);
+    UIGraphicsPopContext();
+}
+
+- (void)drawScrollerAtY:(CGFloat)y startX:(CGFloat)startX endX:(CGFloat)endX context:(CGContextRef)context {
+    UIColor *blankColor = [RangeSlider colorWithHexString:_blankColor];
+    UIGraphicsPushContext(context);
+    [blankColor setFill];
+    CGContextMoveToPoint(context, startX, y + _thumbRadius);
+    CGRect rect = CGRectMake(startX, y, endX - startX, _thumbRadius * 2);
+    CGContextAddRect(context, CGRectInset(rect, -_thumbRadius/2, 0));
+    CGContextFillPath(context);
+    CGFloat midX = (startX + endX) / 2;
+    CGFloat midY = y + _thumbRadius;
+    CGFloat dx = 3;
+    CGContextMoveToPoint(context, midX - dx, midY - dx);
+    CGContextAddLineToPoint(context, midX - dx, midY + dx);
+    CGContextMoveToPoint(context, midX, midY - dx);
+    CGContextAddLineToPoint(context, midX, midY + dx);
+    CGContextMoveToPoint(context, midX + dx, midY - dx);
+    CGContextAddLineToPoint(context, midX + dx, midY + dx);
+    CGContextStrokePath(context);
     UIGraphicsPopContext();
 }
 
@@ -524,9 +578,12 @@ NSDateFormatter *dateTimeFormatter;
 
 - (void)handlePanGesture:(UIPanGestureRecognizer *)recognizer {
     if (recognizer.state == UIGestureRecognizerStateBegan) {
-        NSLog(@"locationInView %.2f", [recognizer locationInView:self].x);
+        CGFloat y = [recognizer locationInView:self].y;
+        NSLog(@"Location in y %.2f", y);
         long long pointerValue = [self getValueForPosition:[recognizer locationInView:self].x];
-        if (!_rangeEnabled ||
+        if (_rangeEnabled && y > 3 * _thumbRadius) {
+            _activeThumb = THUMB_MIDDLE;
+        } else if (!_rangeEnabled ||
             (_lowValue == _highValue && pointerValue < _lowValue) ||
             ABS(pointerValue - _lowValue) < ABS(pointerValue - _highValue)) {
             _activeThumb = THUMB_LOW;
@@ -539,23 +596,23 @@ NSDateFormatter *dateTimeFormatter;
         
     } else if (recognizer.state == UIGestureRecognizerStateChanged) {
         if (_activeThumb == THUMB_MIDDLE) {
-            CGFloat translation = [recognizer translationInView:self].x;
-            CGFloat availableWidth = [self bounds].size.width - 2 * _thumbRadius;
-            long long deltaValue = translation / availableWidth * (_max - _min);
-            if (ABS(deltaValue) > 0) {
-                
-                if (translation < 0) {
-                    long long l = MAX(_min, _lowValue + deltaValue);
-                    [self setHighValue:l + _highValue - _lowValue fromUser:YES];
-                    [self setLowValue:l fromUser:YES];
-                } else {
-                    long long h = MIN(_max, _highValue + deltaValue);
-                    [self setLowValue:h - _highValue + _lowValue fromUser:YES];
-                    [self setHighValue:h fromUser:YES];
-                }
-                [recognizer setTranslation:CGPointZero inView:self];
-            }
-            
+            long long pointerValue = [self getValueForPosition:[recognizer locationInView:self].x];
+//            CGFloat availableWidth = [self bounds].size.width - 2 * _thumbRadius;
+//            long long deltaValue = translation / availableWidth * (_max - _min);
+//            if (ABS(deltaValue) > 0) {
+//
+//                if (translation < 0) {
+//                    long long l = MAX(_min, _lowValue + deltaValue);
+//                    [self setHighValue:l + _highValue - _lowValue fromUser:YES];
+//                    [self setLowValue:l fromUser:YES];
+//                } else {
+//                    long long h = MIN(_max, _highValue + deltaValue);
+//                    [self setLowValue:h - _highValue + _lowValue fromUser:YES];
+//                    [self setHighValue:h fromUser:YES];
+//                }
+//                [recognizer setTranslation:CGPointZero inView:self];
+//            }
+            [self setMidValue:pointerValue fromUser:YES];
         } else {
             long long pointerValue = [self getValueForPosition:[recognizer locationInView:self].x];
             if (!_rangeEnabled) {
