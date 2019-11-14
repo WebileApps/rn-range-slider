@@ -1,6 +1,6 @@
 {
   "name": "@webileapps/rn-range-slider",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "author": "Tigran Sahakyan <mail.of.tigran@gmail.com>",
   "description": "React Native Range Slider for Android and iOS",
   "homepage": "https://github.com/githuboftigran/rn-range-slider",

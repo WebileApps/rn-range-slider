@@ -393,12 +393,21 @@ NSDateFormatter *dateTimeFormatter;
     CGFloat availableWidth = width - 2 * _thumbRadius;
 
     // Draw the blank line
-    CGContextSetLineWidth(context, _lineWidth);
-    CGContextMoveToPoint(context, _thumbRadius, cy);
-    CGContextSetLineCap(context, kCGLineCapSquare);
-    CGContextAddLineToPoint(context, width - _thumbRadius, cy);
-    [blankColor setStroke];
+    CGContextAddRect(context, CGRectMake(_thumbRadius/2, cy - _lineWidth / 2, width - _thumbRadius, _lineWidth));
+    [blankColor setFill];
+    CGContextFillPath(context);
+    
+    // Draw notches at the edge
+    UIGraphicsPushContext(context);
+    CGContextSetLineWidth(context, 1.0);
+    CGContextMoveToPoint(context, _thumbRadius/2, cy - _thumbRadius * 3 / 4);
+    CGContextAddLineToPoint(context, _thumbRadius/2, cy + _thumbRadius * 3 / 4);
+    CGContextMoveToPoint(context, width - _thumbRadius/2, cy - _thumbRadius * 3 / 4);
+    CGContextAddLineToPoint(context, width - _thumbRadius/2, cy + _thumbRadius * 3 / 4);
+    UIColor *thumbColor = [RangeSlider colorWithHexString:_thumbColor];
+    [thumbColor setStroke];
     CGContextStrokePath(context);
+    UIGraphicsPopContext();
 
     CGFloat lowX = _thumbRadius + availableWidth * (_lowValue - _min) / (_max - _min);
     CGFloat highX = _thumbRadius + availableWidth * (_highValue - _min) / (_max - _min);
@@ -527,6 +536,10 @@ NSDateFormatter *dateTimeFormatter;
     CGFloat midX = (startX + endX) / 2;
     CGFloat midY = y + _thumbRadius;
     CGFloat dx = 3;
+    CGContextMoveToPoint(context, startX -_thumbRadius/2, y + _thumbRadius);
+    CGContextAddLineToPoint(context, startX -_thumbRadius/2, y + 3 * _thumbRadius);
+    CGContextMoveToPoint(context, endX + _thumbRadius/2, y + _thumbRadius);
+    CGContextAddLineToPoint(context, endX + _thumbRadius/2, y + 3 * _thumbRadius);
     CGContextMoveToPoint(context, midX - dx, midY - dx);
     CGContextAddLineToPoint(context, midX - dx, midY + dx);
     CGContextMoveToPoint(context, midX, midY - dx);
@@ -579,7 +592,6 @@ NSDateFormatter *dateTimeFormatter;
 - (void)handlePanGesture:(UIPanGestureRecognizer *)recognizer {
     if (recognizer.state == UIGestureRecognizerStateBegan) {
         CGFloat y = [recognizer locationInView:self].y;
-        NSLog(@"Location in y %.2f", y);
         long long pointerValue = [self getValueForPosition:[recognizer locationInView:self].x];
         if (_rangeEnabled && y > 3 * _thumbRadius) {
             _activeThumb = THUMB_MIDDLE;
