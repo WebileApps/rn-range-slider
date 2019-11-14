@@ -254,7 +254,7 @@ NSDateFormatter *dateTimeFormatter;
     [self checkAndFireValueChangeEvent:oldLow oldHigh:oldHigh fromUser:false];
 }
 
-- (void)setInitialLowValue:(long long)lowValue {
+- (void)setInitialLowValue:(double)lowValue {
     if (!_initialLowValueSet) {
         _initialLowValueSet = true;
         [self setLowValue:lowValue];
@@ -266,11 +266,11 @@ NSDateFormatter *dateTimeFormatter;
     return (1 * _thumbRadius) * (_max - _min) / availableWidth;
 }
 
-- (void)setLowValue:(long long)lowValue {
+- (void)setLowValue:(double)lowValue {
     [self setLowValue:lowValue fromUser:NO];
 }
 
-- (void)setLowValue:(long long)lowValue fromUser:(BOOL)fromUser {
+- (void)setLowValue:(double)lowValue fromUser:(BOOL)fromUser {
     long long oldLow = _lowValue;
 
     //Make sure low value doesnot overlap on the other thumb.
@@ -281,18 +281,18 @@ NSDateFormatter *dateTimeFormatter;
     [self setNeedsDisplay];
 }
 
-- (void)setInitialHighValue:(long long)highValue {
+- (void)setInitialHighValue:(double)highValue {
     if (!_initialHighValueSet) {
         _initialHighValueSet = true;
         [self setHighValue:highValue];
     }
 }
 
-- (void)setHighValue:(long long)highValue {
+- (void)setHighValue:(double)highValue {
     [self setHighValue:highValue fromUser:NO];
 }
 
-- (void)setHighValue:(long long)highValue fromUser:(BOOL)fromUser {
+- (void)setHighValue:(double)highValue fromUser:(BOOL)fromUser {
     long long oldHigh = _highValue;
     
     //Make sure hight value doesnot overlap on the other thumb.
