@@ -5,13 +5,14 @@ import android.graphics.Canvas;
 import android.graphics.CornerPathEffect;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.RectF;
 import android.util.AttributeSet;
 import android.util.TypedValue;
 import android.view.MotionEvent;
 import android.view.View;
 
-import android.support.annotation.Nullable;
-import android.support.v4.view.ViewCompat;
+import androidx.annotation.Nullable;
+import androidx.core.view.ViewCompat;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -35,6 +36,7 @@ public class RangeSlider extends View {
 
     private static final int THUMB_LOW = 0;
     private static final int THUMB_HIGH = 1;
+    private static final int THUMB_MIDDLE = 2;
     private static final int THUMB_NONE = -1;
 
     private OnValueChangeListener onValueChangeListener;
@@ -113,7 +115,7 @@ public class RangeSlider extends View {
         selectionPaint.setStrokeCap(Paint.Cap.ROUND);
 
         blankPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        blankPaint.setStrokeCap(Paint.Cap.ROUND);
+        blankPaint.setStrokeCap(Paint.Cap.SQUARE);
 
         labelPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         labelPaint.setStyle(Paint.Style.FILL);
@@ -356,7 +358,7 @@ public class RangeSlider extends View {
         switch (event.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
                 activePointerId = event.getPointerId(actionIndex);
-                handleTouchDown(getValueForPosition(event.getX()));
+                handleTouchDown(getValueForPosition(event.getX()), event.getY());
                 if (onSliderTouchListener != null) {
                     onSliderTouchListener.onTouchStart();
                 }
@@ -390,9 +392,11 @@ public class RangeSlider extends View {
         onValueChangeListener.onValueChanged(lowValue, highValue, fromUser);
     }
 
-    private void handleTouchDown(long pointerValue) {
+    private void handleTouchDown(long pointerValue, float y) {
         this.attemptClaimDrag();
-        if (
+        if (rangeEnabled && y > 3 * thumbRadius) {
+            activeThumb = THUMB_MIDDLE;
+        } else if (
             !rangeEnabled ||
             (lowValue == highValue && pointerValue < lowValue) ||
             Math.abs(pointerValue - lowValue) < Math.abs(pointerValue - highValue) // The closer thumb
@@ -407,7 +411,28 @@ public class RangeSlider extends View {
 
     private void handleTouchMove(long pointerValue) {
         this.attemptClaimDrag();
-        if (!rangeEnabled) {
+        if (activeThumb == THUMB_MIDDLE) {
+            long midValue = pointerValue;
+            long oldHigh = highValue;
+            long oldLow = lowValue;
+            long oldMid = (highValue + lowValue) / 2;
+            long dx = midValue - oldMid;
+            long newHigh, newLow;
+            if (dx > 0) { //moving right.
+                newHigh = Math.min(maxValue, oldHigh + dx);
+                dx = newHigh - highValue;
+                newLow = lowValue + dx;
+            } else {
+                newLow = Math.max(minValue, oldLow + dx);
+                dx = newLow - lowValue;
+                newHigh = highValue + dx;
+            }
+            if (dx == 0) {
+                return;
+            }
+            highValue = newHigh;
+            lowValue = newLow;
+        } else if (!rangeEnabled) {
             lowValue = pointerValue;
         } else if (activeThumb == THUMB_LOW) {
             lowValue = Utils.clamp(pointerValue, minValue, highValue - 1);
@@ -442,19 +467,20 @@ public class RangeSlider extends View {
         float drawingHeight = labelAndGapHeight + 2 * thumbRadius;
         float height = getHeight();
         if (height > drawingHeight) {
-            if (gravity == Gravity.BOTTOM) {
-                canvas.translate(0, height - drawingHeight);
-            } else if (gravity == Gravity.CENTER) {
-                canvas.translate(0, (height - drawingHeight) / 2);
-            }
+            canvas.translate(0, dpToPx(5));
         }
 
-        float cy = labelAndGapHeight + thumbRadius;
+        float cy = labelAndGapHeight + thumbRadius + thumbRadius / 2;
         float width = getWidth();
         float availableWidth = width - 2 * thumbRadius;
 
         // Draw the blank line
         canvas.drawLine(thumbRadius, cy, width - thumbRadius, cy, blankPaint);
+
+        // Draw notches at the ends
+        canvas.drawLine(thumbRadius / 2, cy -  2 * thumbRadius / 3, thumbRadius / 2, cy +  2 * thumbRadius / 3, thumbBorderPaint);
+        canvas.drawLine(width - thumbRadius / 2, cy -  2 * thumbRadius / 3, width - thumbRadius / 2, cy +  2 * thumbRadius / 3, thumbBorderPaint);
+
         float lowX = thumbRadius + availableWidth * (lowValue - minValue) / (maxValue - minValue);
         float highX = thumbRadius + availableWidth * (highValue - minValue) / (maxValue - minValue);
 
@@ -469,6 +495,7 @@ public class RangeSlider extends View {
             drawThumb(canvas, lowX, cy);
             if (rangeEnabled) {
                 drawThumb(canvas, Math.max(lowX + thumbRadius, highX), cy);
+                drawScroller(canvas, lowX, Math.max(lowX + thumbRadius, highX),  3 * thumbRadius);
             }
         }
 
@@ -531,6 +558,29 @@ public class RangeSlider extends View {
         path.close();
         canvas.drawPath(path, thumbPaint);
         canvas.drawPath(path, thumbBorderPaint);
+    }
+
+    private void drawScroller(Canvas canvas, float startX, float endX, float y) {
+
+        canvas.save();
+        canvas.drawRect(new RectF(startX - thumbRadius / 2, y, endX + thumbRadius / 2, y + thumbRadius * 2), blankPaint);
+
+        float midX = (startX + endX)/ 2;
+        float midY = y + thumbRadius;
+        float dx = dpToPx(3);
+
+//        CGContextMoveToPoint(context, startX -_thumbRadius/2, y + _thumbRadius);
+//        CGContextAddLineToPoint(context, startX -_thumbRadius/2, y + 3 * _thumbRadius);
+        canvas.drawLine(startX - thumbRadius/2, y - thumbRadius, startX - thumbRadius/2, y + 2 * thumbRadius, thumbBorderPaint);
+
+//        CGContextMoveToPoint(context, endX + _thumbRadius/2, y + _thumbRadius);
+//        CGContextAddLineToPoint(context, endX + _thumbRadius/2, y + 3 * _thumbRadius);
+        canvas.drawLine(endX + thumbRadius/2, y - thumbRadius, endX + thumbRadius/2, y + 2 * thumbRadius, thumbBorderPaint);
+
+        canvas.drawLine(midX - dx, midY - dx, midX - dx, midY + dx, thumbBorderPaint);
+        canvas.drawLine(midX, midY - dx, midX, midY + dx, thumbBorderPaint);
+        canvas.drawLine(midX + dx, midY - dx, midX + dx, midY + dx, thumbBorderPaint);
+        canvas.restore();
     }
 
     private void preparePath(float x, float y, float left, float top, float right, float bottom, float tailHeight) {
