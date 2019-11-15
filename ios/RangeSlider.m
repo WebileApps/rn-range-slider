@@ -274,8 +274,7 @@ NSDateFormatter *dateTimeFormatter;
     long long oldLow = _lowValue;
 
     //Make sure low value doesnot overlap on the other thumb.
-    long long high = _highValue - [self minimumHandleSpace];
-    _lowValue = CLAMP(lowValue, _min, (_rangeEnabled ? high : _max));
+    _lowValue = CLAMP(lowValue, _min, (_rangeEnabled ? _highValue - 1 : _max));
     
     [self checkAndFireValueChangeEvent:oldLow oldHigh:_highValue fromUser:fromUser];
     [self setNeedsDisplay];
@@ -296,9 +295,7 @@ NSDateFormatter *dateTimeFormatter;
     long long oldHigh = _highValue;
     
     //Make sure hight value doesnot overlap on the other thumb.
-    long long low = _lowValue + [self minimumHandleSpace];
-    
-    _highValue = CLAMP(highValue, low, _max);
+    _highValue = CLAMP(highValue, _lowValue + 1, _max);
     [self checkAndFireValueChangeEvent:_lowValue oldHigh:oldHigh fromUser:fromUser];
     [self setNeedsDisplay];
 }
