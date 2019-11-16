@@ -20,6 +20,8 @@ import java.util.Date;
 
 public class RangeSlider extends View {
 
+    private static final String TAG = "RangeSlider";
+
     public enum LabelStyle {
         BUBBLE,
         NONE
@@ -77,7 +79,6 @@ public class RangeSlider extends View {
     private float labelTailHeight;
     private float labelGapHeight;
 
-    private int activePointerId;
     private int activeThumb;
 
     public RangeSlider(Context context) {
@@ -99,7 +100,6 @@ public class RangeSlider extends View {
 
         dateTimeFormat = new SimpleDateFormat();
         dateTime = new Date();
-        activePointerId = -1;
         activeThumb = THUMB_NONE;
 
         minValue = Long.MIN_VALUE;
@@ -350,25 +350,23 @@ public class RangeSlider extends View {
         if (!isEnabled()) {
             return false;
         }
-        int actionIndex = event.getActionIndex();
+
 
         long oldLow = this.lowValue;
         long oldHigh = this.highValue;
 
-        switch (event.getActionMasked()) {
+        switch (event.getAction()) {
             case MotionEvent.ACTION_DOWN:
-                activePointerId = event.getPointerId(actionIndex);
                 handleTouchDown(getValueForPosition(event.getX()), event.getY());
                 if (onSliderTouchListener != null) {
                     onSliderTouchListener.onTouchStart();
                 }
                 break;
             case MotionEvent.ACTION_MOVE:
-                long pointerValue = getValueForPosition(event.getX(event.findPointerIndex(activePointerId)));
+                long pointerValue = getValueForPosition(event.getX());
                 handleTouchMove(pointerValue);
                 break;
             case MotionEvent.ACTION_UP:
-                activePointerId = -1;
                 activeThumb = THUMB_NONE;
                 if (onSliderTouchListener != null) {
                     onSliderTouchListener.onTouchEnd();
