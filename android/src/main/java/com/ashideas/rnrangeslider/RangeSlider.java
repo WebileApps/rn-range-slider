@@ -321,7 +321,7 @@ public class RangeSlider extends View {
      */
     public void setLowValue(long lowValue) {
         long oldLow = this.lowValue;
-        this.lowValue = Utils.clamp(lowValue, minValue, rangeEnabled ? highValue - 1 : maxValue);
+        this.lowValue = Utils.clamp(lowValue, minValue, rangeEnabled ? highValue - step : maxValue);
         checkAndFireValueChangeEvent(oldLow, highValue, false);
         ViewCompat.postInvalidateOnAnimation(this);
     }
@@ -340,7 +340,7 @@ public class RangeSlider extends View {
      */
     public void setHighValue(long highValue) {
         long oldHigh = this.highValue;
-        this.highValue = Utils.clamp(highValue, lowValue + 1, maxValue);
+        this.highValue = Utils.clamp(highValue, lowValue + step, maxValue);
         checkAndFireValueChangeEvent(lowValue, oldHigh, false);
         ViewCompat.postInvalidateOnAnimation(this);
     }
@@ -492,8 +492,8 @@ public class RangeSlider extends View {
         if (thumbRadius > 0) {
             drawThumb(canvas, lowX, cy);
             if (rangeEnabled) {
-                drawThumb(canvas, Math.max(lowX + thumbRadius, highX), cy);
-                drawScroller(canvas, lowX, Math.max(lowX + thumbRadius, highX),  3 * thumbRadius);
+                drawThumb(canvas, highX, cy);
+                drawScroller(canvas, lowX, highX,  3 * thumbRadius);
             }
         }
 

@@ -274,7 +274,7 @@ NSDateFormatter *dateTimeFormatter;
     long long oldLow = _lowValue;
 
     //Make sure low value doesnot overlap on the other thumb.
-    _lowValue = CLAMP(lowValue, _min, (_rangeEnabled ? _highValue - 1 : _max));
+    _lowValue = CLAMP(lowValue, _min, (_rangeEnabled ? _highValue - _step : _max));
     
     [self checkAndFireValueChangeEvent:oldLow oldHigh:_highValue fromUser:fromUser];
     [self setNeedsDisplay];
@@ -295,7 +295,7 @@ NSDateFormatter *dateTimeFormatter;
     long long oldHigh = _highValue;
     
     //Make sure hight value doesnot overlap on the other thumb.
-    _highValue = CLAMP(highValue, _lowValue + 1, _max);
+    _highValue = CLAMP(highValue, _lowValue + _step, _max);
     [self checkAndFireValueChangeEvent:_lowValue oldHigh:oldHigh fromUser:fromUser];
     [self setNeedsDisplay];
 }
@@ -435,8 +435,8 @@ NSDateFormatter *dateTimeFormatter;
     if (_thumbRadius > 0) {
         [self drawThumbAtX:lowX centerY:cy lineAtLeftEdge:YES context:context];
         if (_rangeEnabled) {
-            [self drawThumbAtX:MAX(lowX + _thumbRadius, highX) centerY:cy lineAtLeftEdge:NO context:context];
-            [self drawScrollerAtY:3 * _thumbRadius  startX:lowX endX:MAX(lowX + _thumbRadius, highX) context:context];
+            [self drawThumbAtX:highX centerY:cy lineAtLeftEdge:NO context:context];
+            [self drawScrollerAtY:3 * _thumbRadius  startX:lowX endX:highX context:context];
         }
     }
 
