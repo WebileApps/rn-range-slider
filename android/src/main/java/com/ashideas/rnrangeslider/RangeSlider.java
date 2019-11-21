@@ -433,9 +433,9 @@ public class RangeSlider extends View {
         } else if (!rangeEnabled) {
             lowValue = pointerValue;
         } else if (activeThumb == THUMB_LOW) {
-            lowValue = Utils.clamp(pointerValue, minValue, highValue - 1);
+            lowValue = Utils.clamp(pointerValue, minValue, highValue - step);
         } else if (activeThumb == THUMB_HIGH) {
-            highValue = Utils.clamp(pointerValue, lowValue + 1, maxValue);
+            highValue = Utils.clamp(pointerValue, lowValue + step, maxValue);
         }
     }
 
